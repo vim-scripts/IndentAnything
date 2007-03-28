@@ -3,7 +3,7 @@
 "
 "   Indent Anything
 "
-" Version: 1.0
+" Version: 1.1
 "
 " Description:
 "
@@ -394,7 +394,10 @@ function! GetPairIndent(CurrLine, LastLine, LastLNum, Head, Mid, Tail)
                 break
             endif
             let syn = synIDattr(synID(line("."), col("."), 1), "name")
-            if syn =~ b:commentRE || syn =~ b:stringRE
+            " Also continue on the off chance that we find the match on the
+            " current line.  This shouldn't happen, but the pattern might
+            " start with whitespace.
+            if syn =~ b:commentRE || syn =~ b:stringRE || pairstart == origline
                 continue
             endif
             let levels += 1

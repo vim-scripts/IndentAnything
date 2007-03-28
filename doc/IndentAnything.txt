@@ -45,9 +45,12 @@ b:indentTrios
 >
 		let b:indentTrios = [
 		            \ [ '(', '', ')' ],
-		            \ [ '{', '^\s*\(default:\|case.*:\)', '}' ]
+		            \ [ '{', '\(default:\|case.*:\)', '}' ]
 		\]
 <
+	Note: There is logic that makes the distinction between matches at the
+	beginning of lines or not.  These patterns should not include '^'
+	(beginning-of-line), or that logic will break.
 
 					*b:lineContList*
 b:lineContList
