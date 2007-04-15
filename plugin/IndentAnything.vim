@@ -1,9 +1,9 @@
 "
-" Script:
+" Plugin:
 "
 "   Indent Anything
 "
-" Version: 1.1
+" Version: 1.2
 "
 " Description:
 "
@@ -21,7 +21,7 @@
 "   Place this file in your home directory under ~/.vim/indent/, or replace
 "   the system indent/javascript.vim file to affect all users.
 "
-" Maintainer: Tye Z. <zdro@yahoo.com>
+" Maintainer: Tye Z. < z d r o @ y a h o o . c o m >
 "
 " Customization:
 "
@@ -34,6 +34,9 @@
 "
 " History:
 "
+"   1.2 - made some functions script-local to prevent naming collisions
+"       - fixed some broken indentation in the middle of a block comment,
+"         which showed up in Javascript indentation.
 "
 
 let s:supportedVimVersion = 700
@@ -243,14 +246,25 @@ function! IndentAnything()
     "
 
     "
+    " Block comments
+    "
+    let l:BlockCommentAdj = 0
+    let l:BlockCommentAdj += s:GetBlockCommentIndent(currlnum, lastlnum)
+    let adj += l:BlockCommentAdj
+
+    "
     " Pairs
     "
     let b:lastclosed = { 'at' : 0 }
     let b:pairadj = 0
-    for trio in b:indentTrios
-        let b:pairadj += GetPairIndent(currline, lastline, lastlnum, 
-                    \ trio[0], trio[1], trio[2])
-    endfor
+    if !l:BlockCommentAdj
+        " If we're not in the middle of a block comment (because we haven't
+        " made any adjustments for that), then process block indentation.
+        for trio in b:indentTrios
+            let b:pairadj += s:GetPairIndent(currline, lastline, lastlnum, 
+                        \ trio[0], trio[1], trio[2])
+        endfor
+    endif
     let adj += b:pairadj
 
     "
@@ -258,13 +272,15 @@ function! IndentAnything()
     "
     let contadj = 0
     let isBlockCommentStart = currline =~ '^\s*' . b:blockCommentStartRE
-    let isBlockCommentMid = (IsBlockComment(currlnum) && IsBlockComment(lastlnum))
+    let isBlockCommentMid = (IsBlockComment(currlnum) && !isBlockCommentStart)
     if !isBlockCommentMid
+        " If the current line is not the middle of a block comment, then
+        " process line continuations.
         for ContRule in b:lineContList
             if b:contTraversesLineComments "&& !isBlockCommentStart
-                let contadj = GetContIndent(ContRule, currline, lastcodeline, lastcodelnum, prevcodelnum)
+                let contadj = s:GetContIndent(ContRule, currline, lastcodeline, lastcodelnum, prevcodelnum)
             else
-                let contadj = GetContIndent(ContRule, currline, lastline, lastlnum, prevlnum)
+                let contadj = s:GetContIndent(ContRule, currline, lastline, lastlnum, prevlnum)
             endif
             " This is for line continuation patterns, of which there can be only
             " one per line to indicate continuation
@@ -277,15 +293,13 @@ function! IndentAnything()
 
 
     "
-    " Block comments
-    "
-    let adj += GetBlockCommentIndent(currlnum, lastlnum)
-
-
-    "
     " Find the previous indent to which we will add the adjustment
     "
-    if contadj && b:contTraversesLineComments
+    let prevind = indent(lastlnum)
+
+    if l:BlockCommentAdj
+        let g:lastindent .= " indent (prevblockcomment: " . prevind . " at " . lastcodelnum . ") "
+    elseif contadj && b:contTraversesLineComments
         " If we have adjusted for line continuation, then use the indentation
         " for the previous code line
         let prevind = indent(lastcodelnum)
@@ -294,7 +308,7 @@ function! IndentAnything()
     elseif (isBlockCommentStart || !IsBlockComment(currlnum)) && IsBlockComment(lastlnum)
         " If this is the first line after a block comment, then add the
         " adjustment to the line where the block comment started.
-        let prevind = GetPostBlockCommentIndent(lastlnum)
+        let prevind = s:GetPostBlockCommentIndent(lastlnum)
         let g:lastindent .= " indent (prevblock: " . prevind . " at " . lastlnum . ") "
 
     elseif exists("b:defaultIndentExpr")
@@ -302,7 +316,6 @@ function! IndentAnything()
         exec "let prevind = " . b:defaultIndentExpr
     else
         " Default to adjusting the previous line's indent.
-        let prevind = indent(lastlnum)
         let g:lastindent .= " indent (prev: " . prevind . " at " . lastlnum . ") "
     endif
 
@@ -325,7 +338,7 @@ endfunction
 " beginning of the line.  Extra adjustment (b:blockCommentMiddleExtra) will
 " be added.
 "
-function! GetBlockCommentIndent(CurrLNum, LastLNum)
+function! s:GetBlockCommentIndent(CurrLNum, LastLNum)
     let l:cursor = getpos('.')
     let l:adj = 0
     if a:LastLNum == searchpair(b:blockCommentStartRE, '', b:blockCommentEndRE, 'bWr')
@@ -338,7 +351,7 @@ function! GetBlockCommentIndent(CurrLNum, LastLNum)
     return l:adj
 endfunction
 
-function! GetPostBlockCommentIndent(LNum)
+function! s:GetPostBlockCommentIndent(LNum)
 
     let l:cursor = getpos('.')
     let l:ind = 0
@@ -364,7 +377,7 @@ endfunction
 " Get additional indentation based on blocks of code, as defined by the Head
 " and Tail patterns.
 "
-function! GetPairIndent(CurrLine, LastLine, LastLNum, Head, Mid, Tail)
+function! s:GetPairIndent(CurrLine, LastLine, LastLNum, Head, Mid, Tail)
 
     let levels = 0
     let adj = 0
@@ -500,7 +513,7 @@ function! GetPairIndent(CurrLine, LastLine, LastLNum, Head, Mid, Tail)
 endfunction
 
 
-function! GetContIndent(Rule, CurrLine, LastLine, LastLNum, PrevLNum)
+function! s:GetContIndent(Rule, CurrLine, LastLine, LastLNum, PrevLNum)
 
     let adj = 0
     let origcol = col(".")
